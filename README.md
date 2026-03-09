@@ -6,12 +6,12 @@ Automated usage tracking for the team. Each member's machine uploads usage data 
 
 **macOS / Linux:**
 ```
-bash <(curl -sL https://vale-phd.github.io/claude-usage/setup.sh)
+bash <(curl -sL https://raw.githubusercontent.com/vale-phd/claude-usage/master/setup.sh)
 ```
 
 **Windows (PowerShell as Admin):**
 ```
-irm https://vale-phd.github.io/claude-usage/setup.ps1 | iex
+irm https://raw.githubusercontent.com/vale-phd/claude-usage/master/setup.ps1 | iex
 ```
 
 ## Dashboard

@@ -17,13 +17,13 @@
 **macOS / Linux:**
 
 ```bash
-bash <(curl -sL https://vale-phd.github.io/claude-usage/setup.sh)
+bash <(curl -sL https://raw.githubusercontent.com/vale-phd/claude-usage/master/setup.sh)
 ```
 
 **Windows (PowerShell as Admin):**
 
 ```powershell
-irm https://vale-phd.github.io/claude-usage/setup.ps1 | iex
+irm https://raw.githubusercontent.com/vale-phd/claude-usage/master/setup.ps1 | iex
 ```
 
 It will ask for:
