@@ -1,0 +1,20 @@
+# Credentials
+.token
+*.token
+credentials.json
+.credentials.json
+.env
+.env.*
+
+# Config files with secrets
+config.ps1
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node
+node_modules/
