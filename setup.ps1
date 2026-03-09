@@ -12,11 +12,14 @@ $displayName = $displayName.ToLower().Replace(" ", "-")
 
 # 2. Get GitHub token
 Write-Host ""
-Write-Host "You need a GitHub Personal Access Token (classic) with 'repo' scope."
-Write-Host "Create one at: https://github.com/settings/tokens/new"
-Write-Host "  - Note: claude-usage"
-Write-Host "  - Expiration: No expiration (or 1 year)"
-Write-Host "  - Scope: check 'repo'"
+Write-Host "You need a GitHub Fine-Grained Personal Access Token."
+Write-Host "Create one at: https://github.com/settings/personal-access-tokens/new"
+Write-Host ""
+Write-Host "  Token name:          claude-usage"
+Write-Host "  Expiration:          1 year"
+Write-Host "  Repository access:   Only select repositories -> vale-phd/claude-usage"
+Write-Host "  Permissions:         Contents -> Read and write"
+Write-Host "  (leave everything else as No access)"
 Write-Host ""
 $secureToken = Read-Host "Paste your GitHub token" -AsSecureString
 $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
@@ -30,6 +33,7 @@ try {
     Write-Host "Token verified!" -ForegroundColor Green
 } catch {
     Write-Host "ERROR: Token doesn't have access to vale-phd/claude-usage" -ForegroundColor Red
+    Write-Host "Check that your token has Contents read/write for vale-phd/claude-usage." -ForegroundColor Red
     exit 1
 }
 
@@ -53,8 +57,13 @@ Set-Acl $tokenPath $acl
 Write-Host "Token stored securely."
 
 # 6. Download upload script
-$uploadUrl = "https://raw.githubusercontent.com/vale-phd/claude-usage/main/upload.ps1"
-Invoke-WebRequest -Uri $uploadUrl -OutFile (Join-Path $configDir "upload.ps1")
+$uploadUrl = "https://raw.githubusercontent.com/Vale-phd/claude-usage/master/upload.ps1"
+$uploadPath = Join-Path $configDir "upload.ps1"
+Invoke-WebRequest -Uri $uploadUrl -OutFile $uploadPath
+if (-not (Test-Path $uploadPath) -or (Get-Item $uploadPath).Length -lt 100) {
+    Write-Host "ERROR: Failed to download upload script." -ForegroundColor Red
+    exit 1
+}
 
 # 7. Check dependencies
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {

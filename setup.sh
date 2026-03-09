@@ -13,11 +13,14 @@ DISPLAY_NAME=$(echo "$DISPLAY_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 
 # 2. Get GitHub token
 echo ""
-echo "You need a GitHub Personal Access Token (classic) with 'repo' scope."
-echo "Create one at: https://github.com/settings/tokens/new"
-echo "  - Note: claude-usage"
-echo "  - Expiration: No expiration (or 1 year)"
-echo "  - Scope: check 'repo'"
+echo "You need a GitHub Fine-Grained Personal Access Token."
+echo "Create one at: https://github.com/settings/personal-access-tokens/new"
+echo ""
+echo "  Token name:          claude-usage"
+echo "  Expiration:          1 year"
+echo "  Repository access:   Only select repositories → vale-phd/claude-usage"
+echo "  Permissions:         Contents → Read and write"
+echo "  (leave everything else as No access)"
 echo ""
 read -sp "Paste your GitHub token: " GITHUB_TOKEN
 echo ""
@@ -30,7 +33,7 @@ if echo "$VERIFY" | grep -q '"full_name"'; then
     echo "Token verified!"
 else
     echo "ERROR: Token doesn't have access to vale-phd/claude-usage"
-    echo "Make sure you have repo scope and the repo exists."
+    echo "Check that your token has Contents read/write for vale-phd/claude-usage."
     exit 1
 fi
 
@@ -57,8 +60,12 @@ else
 fi
 
 # 6. Download upload script
-curl -sL "https://raw.githubusercontent.com/Vale-phd/claude-usage/master/upload.sh" \
+curl -sfL "https://raw.githubusercontent.com/Vale-phd/claude-usage/master/upload.sh" \
     -o "$CONFIG_DIR/upload.sh"
+if [ ! -s "$CONFIG_DIR/upload.sh" ] || head -1 "$CONFIG_DIR/upload.sh" | grep -qv '^#!/bin/bash'; then
+    echo "ERROR: Failed to download upload script."
+    exit 1
+fi
 chmod +x "$CONFIG_DIR/upload.sh"
 
 # 7. Check dependencies
