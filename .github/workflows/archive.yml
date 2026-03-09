@@ -1,0 +1,73 @@
+name: Archive Usage Data
+
+on:
+  push:
+    paths:
+      - 'data/*.json'
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Archive data to history
+        run: |
+          for datafile in data/*.json; do
+            [ -f "$datafile" ] || continue
+            [ "$(basename "$datafile")" = ".gitkeep" ] && continue
+
+            username=$(basename "$datafile" .json)
+            mkdir -p "history/$username"
+
+            python3 - "$datafile" "$username" <<'PYEOF'
+          import json, sys, os
+          from collections import defaultdict
+
+          datafile = sys.argv[1]
+          username = sys.argv[2]
+
+          with open(datafile) as f:
+              data = json.load(f)
+
+          daily = data.get("daily", [])
+
+          # Group by month
+          months = defaultdict(list)
+          for entry in daily:
+              month = entry["date"][:7]  # "2026-03"
+              months[month].append(entry)
+
+          # Merge into existing history files
+          for month, entries in months.items():
+              history_file = f"history/{username}/{month}.json"
+
+              existing = []
+              if os.path.exists(history_file):
+                  with open(history_file) as f:
+                      existing = json.load(f)
+
+              # Merge: use date as key, new data overwrites old
+              by_date = {e["date"]: e for e in existing}
+              for e in entries:
+                  by_date[e["date"]] = e
+
+              merged = sorted(by_date.values(), key=lambda x: x["date"])
+
+              with open(history_file, "w") as f:
+                  json.dump(merged, f, indent=2)
+
+              print(f"  Archived {len(entries)} entries to {history_file}")
+          PYEOF
+          done
+
+      - name: Commit archived data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add history/
+          git diff --staged --quiet || git commit -m "archive: update history $(date '+%Y-%m-%d')"
+          git push
