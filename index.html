@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Usage — Team Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1117;
+            color: #e1e4e8;
+            min-height: 100vh;
+        }
+        header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 1.2rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        header h1 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+        header .subtitle {
+            font-size: 0.85rem;
+            color: #8b949e;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Main table */
+        .team-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        .team-table th {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #8b949e;
+            border-bottom: 1px solid #30363d;
+        }
+        .team-table td {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid #21262d;
+            font-size: 0.95rem;
+        }
+        .team-table tr:hover td {
+            background: #161b22;
+        }
+        .team-table .name-cell {
+            color: #58a6ff;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .team-table .name-cell:hover {
+            text-decoration: underline;
+        }
+        .cost-cell { color: #7ee787; }
+        .tokens-cell { color: #d2a8ff; }
+        .date-cell { color: #8b949e; }
+
+        /* Detail view */
+        .detail-view { display: none; }
+        .detail-view.active { display: block; }
+        .back-btn {
+            background: none;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+        }
+        .back-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+        .detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+        .detail-header h2 {
+            font-size: 1.4rem;
+            color: #f0f6fc;
+        }
+        .filter-select {
+            background: #161b22;
+            color: #e1e4e8;
+            border: 1px solid #30363d;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+
+        /* Summary cards */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+        }
+        .card-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #8b949e;
+            margin-bottom: 0.3rem;
+        }
+        .card-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .card-value.green { color: #7ee787; }
+        .card-value.purple { color: #d2a8ff; }
+        .card-value.blue { color: #58a6ff; }
+        .card-value.orange { color: #f0883e; }
+
+        /* Chart */
+        .chart-container {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Weekly breakdown table */
+        .weekly-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        .weekly-table th {
+            text-align: left;
+            padding: 0.6rem 1rem;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #8b949e;
+            border-bottom: 1px solid #30363d;
+        }
+        .weekly-table td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid #21262d;
+            font-size: 0.9rem;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #8b949e;
+        }
+        .error {
+            text-align: center;
+            padding: 2rem;
+            color: #f85149;
+        }
+
+        /* Last updated */
+        .last-updated {
+            text-align: center;
+            color: #484f58;
+            font-size: 0.8rem;
+            margin-top: 2rem;
+            padding-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Claude Code Usage</h1>
+            <div class="subtitle">Team Dashboard</div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Main view: team table -->
+        <div id="main-view">
+            <div class="loading" id="loading">Loading usage data...</div>
+            <table class="team-table" id="team-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Total Tokens</th>
+                        <th>Approx. Cost</th>
+                        <th>Last Active</th>
+                    </tr>
+                </thead>
+                <tbody id="team-tbody"></tbody>
+            </table>
+        </div>
+
+        <!-- Detail view: per-user -->
+        <div class="detail-view" id="detail-view">
+            <button class="back-btn" onclick="showMain()">&larr; Back to team</button>
+            <div class="detail-header">
+                <h2 id="detail-name"></h2>
+                <select class="filter-select" id="time-filter" onchange="renderDetail()">
+                    <option value="28">Last 4 weeks</option>
+                    <option value="90">Last 3 months</option>
+                    <option value="180">Last 6 months</option>
+                    <option value="all">All time</option>
+                </select>
+            </div>
+            <div class="summary-cards" id="summary-cards"></div>
+            <div class="chart-container">
+                <canvas id="usage-chart"></canvas>
+            </div>
+            <h3 style="margin-bottom:0.5rem; color:#f0f6fc;">Weekly Breakdown</h3>
+            <table class="weekly-table" id="weekly-table">
+                <thead>
+                    <tr>
+                        <th>Week</th>
+                        <th>Tokens</th>
+                        <th>Cost</th>
+                        <th>Active Days</th>
+                    </tr>
+                </thead>
+                <tbody id="weekly-tbody"></tbody>
+            </table>
+        </div>
+
+        <div class="last-updated" id="last-updated"></div>
+    </div>
+
+    <script>
+    const REPO = 'vale-phd/claude-usage';
+    const API = 'https://api.github.com';
+
+    let usersData = {};
+    let usersHistory = {};
+    let currentUser = null;
+    let chart = null;
+
+    // Model colors for chart
+    const MODEL_COLORS = {
+        'claude-opus-4-6': '#d2a8ff',
+        'claude-opus-4-5': '#bc8cff',
+        'claude-sonnet-4-6': '#58a6ff',
+        'claude-sonnet-4-5': '#388bfd',
+        'claude-haiku-4-5-20251001': '#7ee787',
+        'default': '#f0883e'
+    };
+
+    function formatTokens(n) {
+        if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+        if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(0) + 'k';
+        return n.toString();
+    }
+
+    function formatCost(n) {
+        return '$' + n.toFixed(2);
+    }
+
+    function formatDate(dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    function daysAgo(dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const diff = Math.floor((now - d) / 86400000);
+        if (diff === 0) return 'Today';
+        if (diff === 1) return 'Yesterday';
+        return diff + ' days ago';
+    }
+
+    // Fetch with caching
+    async function cachedFetch(url) {
+        const cached = sessionStorage.getItem(url);
+        if (cached) {
+            const { data, ts } = JSON.parse(cached);
+            if (Date.now() - ts < 300000) return data; // 5 min cache
+        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        sessionStorage.setItem(url, JSON.stringify({ data, ts: Date.now() }));
+        return data;
+    }
+
+    async function loadData() {
+        try {
+            // List files in data/
+            const files = await cachedFetch(`${API}/repos/${REPO}/contents/data`);
+            const jsonFiles = files.filter(f => f.name.endsWith('.json'));
+
+            if (jsonFiles.length === 0) {
+                document.getElementById('loading').textContent = 'No usage data yet. Run the setup script to start tracking.';
+                return;
+            }
+
+            // Fetch each user's data
+            for (const file of jsonFiles) {
+                const username = file.name.replace('.json', '');
+                const content = await cachedFetch(file.url);
+                const decoded = JSON.parse(atob(content.content));
+                usersData[username] = decoded.daily || [];
+            }
+
+            renderMain();
+        } catch (err) {
+            document.getElementById('loading').innerHTML =
+                '<div class="error">Failed to load data. Make sure the repo is public and has data files.<br><small>' + err.message + '</small></div>';
+        }
+    }
+
+    function renderMain() {
+        document.getElementById('loading').style.display = 'none';
+        const table = document.getElementById('team-table');
+        table.style.display = 'table';
+        const tbody = document.getElementById('team-tbody');
+        tbody.innerHTML = '';
+
+        // Compute totals per user
+        const users = Object.keys(usersData).map(name => {
+            const entries = usersData[name];
+            const totalTokens = entries.reduce((s, e) => s + e.totalTokens, 0);
+            const totalCost = entries.reduce((s, e) => s + e.totalCost, 0);
+            const lastDate = entries.length > 0 ? entries[entries.length - 1].date : null;
+            return { name, totalTokens, totalCost, lastDate };
+        });
+
+        // Sort by cost descending
+        users.sort((a, b) => b.totalCost - a.totalCost);
+
+        for (const user of users) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="name-cell" onclick="showDetail('${user.name}')">${user.name}</td>
+                <td class="tokens-cell">${formatTokens(user.totalTokens)}</td>
+                <td class="cost-cell">${formatCost(user.totalCost)}</td>
+                <td class="date-cell">${user.lastDate ? daysAgo(user.lastDate) : 'Never'}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        document.getElementById('last-updated').textContent = 'Last refreshed: ' + new Date().toLocaleString();
+    }
+
+    async function loadHistory(username) {
+        if (usersHistory[username]) return;
+
+        try {
+            const files = await cachedFetch(`${API}/repos/${REPO}/contents/history/${username}`);
+            let allEntries = [];
+            for (const file of files) {
+                if (!file.name.endsWith('.json')) continue;
+                const content = await cachedFetch(file.url);
+                const decoded = JSON.parse(atob(content.content));
+                allEntries = allEntries.concat(decoded);
+            }
+            usersHistory[username] = allEntries;
+        } catch {
+            // No history yet — just use current data
+            usersHistory[username] = [];
+        }
+    }
+
+    async function showDetail(username) {
+        currentUser = username;
+        document.getElementById('main-view').style.display = 'none';
+        document.getElementById('detail-view').classList.add('active');
+        document.getElementById('detail-name').textContent = username;
+        document.getElementById('time-filter').value = '28';
+
+        await loadHistory(username);
+        renderDetail();
+    }
+
+    function showMain() {
+        document.getElementById('main-view').style.display = 'block';
+        document.getElementById('detail-view').classList.remove('active');
+        if (chart) { chart.destroy(); chart = null; }
+        currentUser = null;
+    }
+
+    function getMergedEntries(username) {
+        // Merge current data with history, dedup by date
+        const byDate = {};
+        const history = usersHistory[username] || [];
+        const current = usersData[username] || [];
+        for (const e of history) byDate[e.date] = e;
+        for (const e of current) byDate[e.date] = e; // current overwrites
+        return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    function filterEntries(entries, days) {
+        if (days === 'all') return entries;
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - parseInt(days));
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        return entries.filter(e => e.date >= cutoffStr);
+    }
+
+    function renderDetail() {
+        const username = currentUser;
+        const days = document.getElementById('time-filter').value;
+        const allEntries = getMergedEntries(username);
+        const entries = filterEntries(allEntries, days);
+
+        // Summary cards
+        const totalTokens = entries.reduce((s, e) => s + e.totalTokens, 0);
+        const totalCost = entries.reduce((s, e) => s + e.totalCost, 0);
+        const activeDays = entries.length;
+
+        // Most used model
+        const modelCounts = {};
+        for (const e of entries) {
+            for (const m of (e.modelsUsed || [])) {
+                modelCounts[m] = (modelCounts[m] || 0) + 1;
+            }
+        }
+        const topModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0];
+        const topModelName = topModel ? topModel[0].replace('claude-', '') : 'N/A';
+
+        const cardsEl = document.getElementById('summary-cards');
+        cardsEl.innerHTML = `
+            <div class="card">
+                <div class="card-label">Total Tokens</div>
+                <div class="card-value purple">${formatTokens(totalTokens)}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Approx. Cost</div>
+                <div class="card-value green">${formatCost(totalCost)}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Active Days</div>
+                <div class="card-value blue">${activeDays}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Top Model</div>
+                <div class="card-value orange">${topModelName}</div>
+            </div>
+        `;
+
+        // Chart — daily tokens by model
+        renderChart(entries);
+
+        // Weekly breakdown table
+        renderWeeklyTable(entries);
+    }
+
+    function renderChart(entries) {
+        if (chart) { chart.destroy(); chart = null; }
+
+        // Collect all models
+        const allModels = new Set();
+        for (const e of entries) {
+            if (e.modelBreakdowns) {
+                for (const mb of e.modelBreakdowns) allModels.add(mb.modelName);
+            }
+        }
+
+        const datasets = [];
+        for (const model of allModels) {
+            const color = MODEL_COLORS[model] || MODEL_COLORS['default'];
+            datasets.push({
+                label: model.replace('claude-', ''),
+                data: entries.map(e => {
+                    const mb = (e.modelBreakdowns || []).find(m => m.modelName === model);
+                    return {
+                        x: e.date,
+                        y: mb ? mb.cost : 0
+                    };
+                }),
+                backgroundColor: color + 'cc',
+                borderColor: color,
+                borderWidth: 1
+            });
+        }
+
+        const ctx = document.getElementById('usage-chart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'bar',
+            data: { datasets },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        labels: { color: '#8b949e', font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => formatDate(items[0].raw.x),
+                            label: (item) => `${item.dataset.label}: ${formatCost(item.raw.y)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'day', tooltipFormat: 'PP' },
+                        stacked: true,
+                        ticks: { color: '#484f58', maxRotation: 45 },
+                        grid: { color: '#21262d' }
+                    },
+                    y: {
+                        stacked: true,
+                        ticks: {
+                            color: '#484f58',
+                            callback: (v) => '$' + v.toFixed(0)
+                        },
+                        grid: { color: '#21262d' },
+                        title: {
+                            display: true,
+                            text: 'Cost (USD)',
+                            color: '#8b949e'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderWeeklyTable(entries) {
+        const tbody = document.getElementById('weekly-tbody');
+        tbody.innerHTML = '';
+
+        // Group by ISO week
+        const weeks = {};
+        for (const e of entries) {
+            const d = new Date(e.date + 'T00:00:00');
+            const weekStart = new Date(d);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            weekStart.setDate(diff);
+            const key = weekStart.toISOString().slice(0, 10);
+            if (!weeks[key]) weeks[key] = { tokens: 0, cost: 0, days: 0 };
+            weeks[key].tokens += e.totalTokens;
+            weeks[key].cost += e.totalCost;
+            weeks[key].days += 1;
+        }
+
+        const sorted = Object.entries(weeks).sort((a, b) => b[0].localeCompare(a[0]));
+        for (const [weekStart, data] of sorted) {
+            const weekEnd = new Date(weekStart + 'T00:00:00');
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            const label = formatDate(weekStart) + ' – ' + formatDate(weekEnd.toISOString().slice(0, 10));
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${label}</td>
+                <td class="tokens-cell">${formatTokens(data.tokens)}</td>
+                <td class="cost-cell">${formatCost(data.cost)}</td>
+                <td>${data.days}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
+    // Init
+    loadData();
+    </script>
+</body>
+</html>
