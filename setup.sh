@@ -57,7 +57,7 @@ else
 fi
 
 # 6. Download upload script
-curl -sL "https://raw.githubusercontent.com/vale-phd/claude-usage/main/upload.sh" \
+curl -sL "https://raw.githubusercontent.com/Vale-phd/claude-usage/master/upload.sh" \
     -o "$CONFIG_DIR/upload.sh"
 chmod +x "$CONFIG_DIR/upload.sh"
 
