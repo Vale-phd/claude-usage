@@ -245,8 +245,7 @@
     </div>
 
     <script>
-    const REPO = 'vale-phd/claude-usage';
-    const API = 'https://api.github.com';
+    const BASE = 'https://vale-phd.github.io/claude-usage';
 
     let usersData = {};
     let usersHistory = {};
@@ -289,43 +288,54 @@
         return diff + ' days ago';
     }
 
-    // Fetch with caching
+    // Fetch JSON from Pages with session cache (5 min)
     async function cachedFetch(url) {
         const cached = sessionStorage.getItem(url);
         if (cached) {
             const { data, ts } = JSON.parse(cached);
-            if (Date.now() - ts < 300000) return data; // 5 min cache
+            if (Date.now() - ts < 300000) return data;
         }
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) return null;
         const data = await res.json();
         sessionStorage.setItem(url, JSON.stringify({ data, ts: Date.now() }));
         return data;
     }
 
+    // Generate month strings from start to now (YYYY-MM)
+    function monthRange(startDate) {
+        const months = [];
+        const now = new Date();
+        const d = new Date(startDate + '-01T00:00:00');
+        while (d <= now) {
+            months.push(d.toISOString().slice(0, 7));
+            d.setMonth(d.getMonth() + 1);
+        }
+        return months;
+    }
+
     async function loadData() {
         try {
-            // List files in data/
-            const files = await cachedFetch(`${API}/repos/${REPO}/contents/data`);
-            const jsonFiles = files.filter(f => f.name.endsWith('.json'));
-
-            if (jsonFiles.length === 0) {
+            // Fetch manifest from Pages (no API, no rate limit)
+            const users = await cachedFetch(`${BASE}/manifest.json`);
+            if (!users || users.length === 0) {
                 document.getElementById('loading').textContent = 'No usage data yet. Run the setup script to start tracking.';
                 return;
             }
 
-            // Fetch each user's data
-            for (const file of jsonFiles) {
-                const username = file.name.replace('.json', '');
-                const content = await cachedFetch(file.url);
-                const decoded = JSON.parse(atob(content.content));
-                usersData[username] = decoded.daily || [];
-            }
+            // Fetch each user's current data directly from Pages
+            const fetches = users.map(async (username) => {
+                const data = await cachedFetch(`${BASE}/data/${username}.json`);
+                if (data) {
+                    usersData[username] = data.daily || [];
+                }
+            });
+            await Promise.all(fetches);
 
             renderMain();
         } catch (err) {
             document.getElementById('loading').innerHTML =
-                '<div class="error">Failed to load data. Make sure the repo is public and has data files.<br><small>' + err.message + '</small></div>';
+                '<div class="error">Failed to load data.<br><small>' + err.message + '</small></div>';
         }
     }
 
@@ -365,20 +375,18 @@
     async function loadHistory(username) {
         if (usersHistory[username]) return;
 
-        try {
-            const files = await cachedFetch(`${API}/repos/${REPO}/contents/history/${username}`);
-            let allEntries = [];
-            for (const file of files) {
-                if (!file.name.endsWith('.json')) continue;
-                const content = await cachedFetch(file.url);
-                const decoded = JSON.parse(atob(content.content));
-                allEntries = allEntries.concat(decoded);
-            }
-            usersHistory[username] = allEntries;
-        } catch {
-            // No history yet — just use current data
-            usersHistory[username] = [];
-        }
+        // Find earliest date in current data to determine month range
+        const entries = usersData[username] || [];
+        const earliest = entries.length > 0 ? entries[0].date.slice(0, 7) : new Date().toISOString().slice(0, 7);
+        const months = monthRange(earliest);
+
+        // Fetch all history months in parallel from Pages (404s return null)
+        const fetches = months.map(async (month) => {
+            const data = await cachedFetch(`${BASE}/history/${username}/${month}.json`);
+            return data || [];
+        });
+        const results = await Promise.all(fetches);
+        usersHistory[username] = results.flat();
     }
 
     async function showDetail(username) {
